@@ -1,0 +1,159 @@
+@page
+@model ClientModel
+@{
+    ViewData["Title"] = "Mon compte";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Bonjour, @Model.ClientConnecte?.NomComplet</h4>
+    <form method="post" asp-page-handler="Deconnexion">
+        <button type="submit" class="btn btn-sm btn-outline-danger">Déconnexion</button>
+    </form>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.MessageSucces))
+{
+    <div class="alert alert-success">@Model.MessageSucces</div>
+}
+@if (!string.IsNullOrEmpty(Model.MessageErreur))
+{
+    <div class="alert alert-danger">@Model.MessageErreur</div>
+}
+
+<h6 class="text-muted">Soldes de tous vos comptes</h6>
+<div class="row row-cols-1 row-cols-md-2 g-3 mb-4">
+    @foreach (var compte in Model.Comptes)
+    {
+        var estMarge = compte.Type == TypeCompte.MargeCredit;
+        <div class="col">
+            <div class="card carte-solde @(estMarge ? "marge-credit" : "")">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <span class="fw-semibold">@compte.Type</span>
+                        <span class="text-muted small">#@compte.NumeroCompte</span>
+                    </div>
+                    <div class="fs-4 mt-1">
+                        @compte.Solde.ToString("C")
+                        @if (estMarge)
+                        {
+                            <span class="small text-muted">(@(compte.Solde > 0 ? "dette actuelle" : "aucune dette"))</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<ul class="nav nav-tabs" id="operations" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#depot">Dépôt</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#retrait">Retrait</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#transfert">Transfert</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#facture">Paiement de facture</button></li>
+</ul>
+
+<div class="tab-content border border-top-0 p-3 mb-4">
+    <!-- DÉPÔT : chèque, épargne ou hypothécaire -->
+    <div class="tab-pane fade show active" id="depot">
+        <form method="post" asp-page-handler="Deposer" class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Compte à créditer</label>
+                <select name="CompteSelectionne" class="form-select" required>
+                    @foreach (var c in Model.Comptes.Where(c => c.Type != TypeCompte.MargeCredit))
+                    {
+                        <option value="@c.NumeroCompte">@c.Type (#@c.NumeroCompte) — @c.Solde.ToString("C")</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Montant</label>
+                <input type="number" step="0.01" min="0.01" name="Montant" class="form-control" required />
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Déposer</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- RETRAIT : chèque ou épargne, multiple de 10$, max 1000$ -->
+    <div class="tab-pane fade" id="retrait">
+        <form method="post" asp-page-handler="Retirer" class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Compte à débiter</label>
+                <select name="CompteSelectionne" class="form-select" required>
+                    @foreach (var c in Model.Comptes.Where(c => c.Type == TypeCompte.Cheque || c.Type == TypeCompte.Epargne))
+                    {
+                        <option value="@c.NumeroCompte">@c.Type (#@c.NumeroCompte) — @c.Solde.ToString("C")</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Montant (multiple de 10$, max 1000$)</label>
+                <input type="number" step="10" min="10" max="1000" name="Montant" class="form-control" required />
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Retirer</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- TRANSFERT : toujours à partir du compte Chèque -->
+    <div class="tab-pane fade" id="transfert">
+        <form method="post" asp-page-handler="Transferer" class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Vers le compte</label>
+                <select name="CompteDestination" class="form-select" required>
+                    @foreach (var c in Model.Comptes.Where(c => c.Type != TypeCompte.Cheque))
+                    {
+                        <option value="@c.NumeroCompte">
+                            @c.Type (#@c.NumeroCompte) — @c.Solde.ToString("C")
+                            @(c.Type == TypeCompte.MargeCredit ? " (transférer ici rembourse la dette)" : "")
+                        </option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Montant</label>
+                <input type="number" step="0.01" min="0.01" name="Montant" class="form-control" required />
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Transférer</button>
+            </div>
+            <div class="col-12 text-muted small">Transfert prélevé automatiquement de votre compte Chèque.</div>
+        </form>
+    </div>
+
+    <!-- PAIEMENT DE FACTURE : à partir du chèque, frais 1.25$ -->
+    <div class="tab-pane fade" id="facture">
+        <form method="post" asp-page-handler="PayerFacture" class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label">Montant de la facture</label>
+                <input type="number" step="0.01" min="0.01" name="Montant" class="form-control" required />
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Payer (frais de 1,25 $ inclus)</button>
+            </div>
+            <div class="col-12 text-muted small">Prélevé de votre compte Chèque. Des frais de 1,25 $ s'ajoutent au montant.</div>
+        </form>
+    </div>
+</div>
+
+<h6 class="text-muted">Historique récent</h6>
+<div class="table-responsive">
+    <table class="table table-sm table-striped">
+        <thead>
+            <tr><th>Date</th><th>Type</th><th>Montant</th><th>Détails</th></tr>
+        </thead>
+        <tbody>
+            @foreach (var t in Model.DernieresTransactions)
+            {
+                <tr>
+                    <td>@t.DateHeure.ToString("g")</td>
+                    <td>@t.Type</td>
+                    <td>@t.Montant.ToString("C")</td>
+                    <td class="small">@t.Description</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

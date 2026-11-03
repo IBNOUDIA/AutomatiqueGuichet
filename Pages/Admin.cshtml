@@ -1,0 +1,206 @@
+@page
+@model AdminModel
+@{
+    ViewData["Title"] = "Administration";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Panneau administrateur</h4>
+    @if (Model.EstConnecte)
+    {
+        <form method="post" asp-page-handler="DeconnexionAdmin">
+            <button type="submit" class="btn btn-sm btn-outline-danger">Déconnexion admin</button>
+        </form>
+    }
+</div>
+
+@if (!string.IsNullOrEmpty(Model.MessageSucces))
+{
+    <div class="alert alert-success">@Model.MessageSucces</div>
+}
+@if (!string.IsNullOrEmpty(Model.MessageErreur))
+{
+    <div class="alert alert-danger">@Model.MessageErreur</div>
+}
+
+@if (!Model.EstConnecte)
+{
+    <form method="post" asp-page-handler="ConnexionAdmin" class="row justify-content-center g-3">
+        <div class="col-md-6">
+            <label class="form-label">Mot de passe administrateur</label>
+            <input type="password" name="MotDePasseSaisi" class="form-control" required />
+        </div>
+        <div class="col-md-6 d-grid">
+            <button type="submit" class="btn btn-primary">Se connecter</button>
+        </div>
+    </form>
+    <div class="text-center mt-3 footer-lien"><a asp-page="/Index">Retour à l'écran client</a></div>
+}
+else
+{
+    <div class="alert alert-secondary d-flex justify-content-between">
+        <span>Argent papier dans le guichet : <strong>@Model.Guichet.ArgentPapier.ToString("C")</strong> / @Guichet.MaximumArgentPapier.ToString("C") max</span>
+        <span>@(Model.Guichet.EstFerme ? "🔴 GUICHET FERMÉ" : "🟢 Guichet ouvert")</span>
+    </div>
+
+    <ul class="nav nav-tabs" id="adminTabs">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#clients">Clients</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#comptes">Comptes</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#operations">Opérations</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#historique">Historique</button></li>
+    </ul>
+
+    <div class="tab-content border border-top-0 p-3 mb-4">
+
+        <!-- CLIENTS : liste + création + blocage -->
+        <div class="tab-pane fade show active" id="clients">
+            <h6>Créer un client</h6>
+            <form method="post" asp-page-handler="CreerClient" class="row g-2 mb-4">
+                <div class="col-md-2"><input name="NouveauCodeClient" class="form-control" placeholder="Code client" required /></div>
+                <div class="col-md-2"><input name="NouveauNom" class="form-control" placeholder="Nom" required /></div>
+                <div class="col-md-2"><input name="NouveauPrenom" class="form-control" placeholder="Prénom" required /></div>
+                <div class="col-md-2"><input name="NouveauTelephone" class="form-control" placeholder="Téléphone" /></div>
+                <div class="col-md-2"><input name="NouveauCourriel" class="form-control" placeholder="Courriel" /></div>
+                <div class="col-md-1"><input name="NouveauNip" class="form-control" placeholder="NIP" maxlength="4" required /></div>
+                <div class="col-md-2 mt-2"><input type="number" step="0.01" name="NouveauSoldeCheque" class="form-control" placeholder="Solde chèque initial" /></div>
+                <div class="col-md-2 mt-2 d-grid"><button class="btn btn-primary">Créer (avec compte Chèque)</button></div>
+            </form>
+
+            <h6>Bloquer / débloquer l'accès d'un client</h6>
+            <div class="row g-2 mb-4">
+                <div class="col-md-3">
+                    <form method="post" asp-page-handler="Bloquer" class="d-flex gap-2">
+                        <input name="CodeClientCible" class="form-control" placeholder="Code client" required />
+                        <button class="btn btn-outline-danger">Bloquer</button>
+                    </form>
+                </div>
+                <div class="col-md-3">
+                    <form method="post" asp-page-handler="Debloquer" class="d-flex gap-2">
+                        <input name="CodeClientCible" class="form-control" placeholder="Code client" required />
+                        <button class="btn btn-outline-success">Débloquer</button>
+                    </form>
+                </div>
+            </div>
+
+            <h6>Modifier les informations d'un client</h6>
+            <form method="post" asp-page-handler="ModifierClient" class="row g-2 mb-4">
+                <div class="col-md-2"><input name="CodeClientAModifier" class="form-control" placeholder="Code client" required /></div>
+                <div class="col-md-2"><input name="ModifNom" class="form-control" placeholder="Nouveau nom" required /></div>
+                <div class="col-md-2"><input name="ModifPrenom" class="form-control" placeholder="Nouveau prénom" required /></div>
+                <div class="col-md-2"><input name="ModifTelephone" class="form-control" placeholder="Nouveau téléphone" /></div>
+                <div class="col-md-2"><input name="ModifCourriel" class="form-control" placeholder="Nouveau courriel" /></div>
+                <div class="col-md-2 d-grid"><button class="btn btn-warning">Modifier</button></div>
+            </form>
+
+            <h6>Liste des clients</h6>
+            <div class="mb-2">
+                <input type="text" id="rechercheClient" class="form-control" placeholder="Rechercher un client par nom, prénom ou code..."
+                       oninput="filtrerClients(this.value)"
+                       onkeydown="if (event.key === 'Enter') { event.preventDefault(); filtrerClients(this.value); }" />
+            </div>
+            <table class="table table-sm table-striped">
+                <thead><tr><th>Code</th><th>Nom</th><th>Téléphone</th><th>Courriel</th><th>Statut</th></tr></thead>
+                <tbody id="corpsListeClients">
+                    @foreach (var c in Model.Clients)
+                    {
+                        <tr data-recherche="@($"{c.CodeClient} {c.NomComplet}".ToLowerInvariant())">
+                            <td>@c.CodeClient</td>
+                            <td>@c.NomComplet</td>
+                            <td>@c.Telephone</td>
+                            <td>@c.Courriel</td>
+                            <td>@(c.EstBloque ? "🔴 Bloqué" : "🟢 Actif")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p id="messageAucunResultat" class="text-muted small" hidden>Aucun client ne correspond à cette recherche.</p>
+        </div>
+
+        <!-- COMPTES : création -->
+        <div class="tab-pane fade" id="comptes">
+            <h6>Créer un compte pour un client</h6>
+            <form method="post" asp-page-handler="CreerCompte" class="row g-2">
+                <div class="col-md-3"><input name="CodeClientPourCompte" class="form-control" placeholder="Code client" required /></div>
+                <div class="col-md-3">
+                    <select name="NouveauTypeCompte" class="form-select" required>
+                        @foreach (var type in Enum.GetValues<TypeCompte>())
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3"><input type="number" step="0.01" name="SoldeInitialCompte" class="form-control" placeholder="Solde initial" /></div>
+                <div class="col-md-3 d-grid"><button class="btn btn-primary">Créer le compte</button></div>
+            </form>
+        </div>
+
+        <!-- OPÉRATIONS : intérêts, argent papier, fermeture, prélèvement hypothécaire -->
+        <div class="tab-pane fade" id="operations">
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <h6>Ajouter de l'argent papier (max @Guichet.MaximumArgentPapier.ToString("C"))</h6>
+                    <form method="post" asp-page-handler="AjouterArgentPapier" class="d-flex gap-2">
+                        <input type="number" step="0.01" name="MontantArgentPapier" class="form-control" placeholder="Montant" required />
+                        <button class="btn btn-primary">Ajouter</button>
+                    </form>
+                </div>
+
+                <div class="col-md-6">
+                    <h6>Fermer le guichet</h6>
+                    <form method="post" asp-page-handler="FermerGuichet">
+                        <button class="btn btn-outline-danger w-100" onclick="return confirm('Fermer définitivement le guichet ?');">Fermer le guichet</button>
+                    </form>
+                </div>
+
+                <div class="col-md-6">
+                    <h6>Payer 1% d'intérêt à tous les comptes Épargne</h6>
+                    <form method="post" asp-page-handler="InteretEpargne">
+                        <button class="btn btn-success w-100">Verser l'intérêt</button>
+                    </form>
+                </div>
+
+                <div class="col-md-6">
+                    <h6>Charger 5% d'intérêt sur toutes les marges de crédit endettées</h6>
+                    <form method="post" asp-page-handler="InteretMargeCredit">
+                        <button class="btn btn-warning w-100">Charger l'intérêt</button>
+                    </form>
+                </div>
+
+                <div class="col-md-12">
+                    <h6>Prélever un montant sur un compte hypothécaire spécifique</h6>
+                    <form method="post" asp-page-handler="PreleverHypothecaire" class="row g-2">
+                        <div class="col-md-4"><input name="CompteHypothecaireCible" class="form-control" placeholder="Numéro de compte hypothécaire" required /></div>
+                        <div class="col-md-4"><input type="number" step="0.01" name="MontantPrelevement" class="form-control" placeholder="Montant" required /></div>
+                        <div class="col-md-4 d-grid"><button class="btn btn-primary">Prélever</button></div>
+                    </form>
+                    <p class="text-muted small mt-1">Si le solde est insuffisant, la différence est prélevée de la marge de crédit du client (sinon, erreur).</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- HISTORIQUE -->
+        <div class="tab-pane fade" id="historique">
+            <form method="get" class="row g-2 mb-3">
+                <div class="col-md-6"><input name="CompteConsulte" value="@Model.CompteConsulte" class="form-control" placeholder="Filtrer par numéro de compte (vide = tout afficher)" /></div>
+                <div class="col-md-3"><button class="btn btn-outline-primary">Filtrer</button></div>
+            </form>
+            <table class="table table-sm table-striped">
+                <thead><tr><th>Date</th><th>Client</th><th>Type</th><th>Montant</th><th>Compte source</th><th>Compte dest.</th><th>Détails</th></tr></thead>
+                <tbody>
+                    @foreach (var t in Model.TransactionsAffichees)
+                    {
+                        <tr>
+                            <td>@t.DateHeure.ToString("g")</td>
+                            <td>@t.CodeClient</td>
+                            <td>@t.Type</td>
+                            <td>@t.Montant.ToString("C")</td>
+                            <td>@t.CompteSource</td>
+                            <td>@t.CompteDestination</td>
+                            <td class="small">@t.Description</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

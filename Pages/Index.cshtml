@@ -1,0 +1,55 @@
+@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Connexion";
+}
+
+<div class="text-center mb-4">
+    <h3>Bienvenue</h3>
+    <p class="text-muted">Veuillez saisir votre code de client et votre NIP pour continuer.</p>
+</div>
+
+@if (!string.IsNullOrEmpty(Model.MessageErreur))
+{
+    <div class="alert alert-danger text-center" role="alert">@Model.MessageErreur</div>
+}
+
+<form method="post" class="row justify-content-center g-3">
+    <div class="col-md-8">
+        <label for="CodeClient" class="form-label">Code de client</label>
+        <input asp-for="CodeClient" id="CodeClient" class="form-control form-control-lg text-center" autocomplete="off" maxlength="10" required />
+    </div>
+    <div class="col-md-8">
+        <label for="Nip" class="form-label">NIP (4 chiffres)</label>
+        <input asp-for="Nip" id="Nip" type="password" inputmode="numeric" pattern="[0-9]*"
+               class="form-control form-control-lg text-center" autocomplete="off" maxlength="4" readonly required />
+    </div>
+
+    <div class="col-md-8">
+        <div class="row row-cols-3 g-2 pave-numerique">
+            @for (int i = 1; i <= 9; i++)
+            {
+                <div class="col">
+                    <button type="button" class="btn btn-outline-dark w-100" onclick="ajouterChiffre('Nip','@i',4)">@i</button>
+                </div>
+            }
+            <div class="col">
+                <button type="button" class="btn btn-outline-secondary w-100" onclick="effacerChamp('Nip')">Effacer</button>
+            </div>
+            <div class="col">
+                <button type="button" class="btn btn-outline-dark w-100" onclick="ajouterChiffre('Nip','0',4)">0</button>
+            </div>
+            <div class="col">
+                <button type="button" class="btn btn-outline-secondary w-100" onclick="effacerDernierChiffre('Nip')">⌫</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8 d-grid mt-2">
+        <button type="submit" class="btn btn-primary btn-lg">Valider</button>
+    </div>
+</form>
+
+<div class="text-center mt-4 footer-lien">
+    <a asp-page="/Admin">Accès administrateur</a>
+</div>
