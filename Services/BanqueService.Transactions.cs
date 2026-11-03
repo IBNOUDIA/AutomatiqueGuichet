@@ -111,12 +111,19 @@ public partial class BanqueService
             if (cheque.Solde < montant)
                 return Resultat.Echec("Solde insuffisant dans le compte Chèque pour effectuer ce transfert.");
 
+            // Un remboursement de marge ne peut pas dépasser la dette : sinon le surplus
+            // serait débité du compte Chèque sans être crédité nulle part.
+            if (destination.Type == TypeCompte.MargeCredit && montant > destination.Solde)
+                return Resultat.Echec(destination.Solde == 0
+                    ? "La marge de crédit n'a aucune dette à rembourser."
+                    : $"Le montant dépasse la dette de la marge de crédit ({destination.Solde:C}).");
+
             cheque.Solde -= montant;
 
             if (destination.Type == TypeCompte.MargeCredit)
             {
-                // Remboursement : diminue la dette, sans jamais devenir négatif.
-                destination.Solde = Math.Max(0, destination.Solde - montant);
+                // Remboursement : diminue la dette (jamais sous zéro, vérifié plus haut).
+                destination.Solde -= montant;
             }
             else
             {
