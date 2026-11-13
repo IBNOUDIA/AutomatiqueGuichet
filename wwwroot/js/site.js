@@ -41,3 +41,13 @@ function filtrerClients(recherche) {
         messageAucunResultat.hidden = resultatsTrouves > 0;
     }
 }
+
+// Panneau admin : ouvre l'onglet Historique quand on filtre par compte
+// (lien « Historique » de la liste des comptes ou formulaire de filtre).
+document.addEventListener("DOMContentLoaded", () => {
+    const filtreCompte = new URLSearchParams(window.location.search).get("CompteConsulte");
+    if (window.location.hash !== "#historique" && !filtreCompte) return;
+
+    const bouton = document.querySelector('#adminTabs [data-bs-target="#historique"]');
+    if (bouton && window.bootstrap) bootstrap.Tab.getOrCreateInstance(bouton).show();
+});

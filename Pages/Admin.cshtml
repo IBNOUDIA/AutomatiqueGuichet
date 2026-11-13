@@ -56,7 +56,7 @@ else
         <div class="tab-pane fade show active" id="clients">
             <h6>Créer un client</h6>
             <form method="post" asp-page-handler="CreerClient" class="row g-2 mb-4">
-                <div class="col-md-2"><input name="NouveauCodeClient" class="form-control" placeholder="Code client" required /></div>
+                <div class="col-md-2"><input name="NouveauCodeClient" class="form-control" placeholder="Code (4 chiffres)" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" title="4 chiffres" required /></div>
                 <div class="col-md-2"><input name="NouveauNom" class="form-control" placeholder="Nom" required /></div>
                 <div class="col-md-2"><input name="NouveauPrenom" class="form-control" placeholder="Prénom" required /></div>
                 <div class="col-md-2"><input name="NouveauTelephone" class="form-control" placeholder="Téléphone" /></div>
@@ -132,6 +132,31 @@ else
                 <div class="col-md-3"><input type="number" step="0.01" name="SoldeInitialCompte" class="form-control" placeholder="Solde initial" /></div>
                 <div class="col-md-3 d-grid"><button class="btn btn-primary">Créer le compte</button></div>
             </form>
+            <p class="text-muted small mt-1">Un seul compte Chèque et une seule marge de crédit par client. Une marge de crédit est créée sans dette (0 $).</p>
+
+            <h6 class="mt-4">Comptes de tous les clients</h6>
+            <table class="table table-sm table-striped">
+                <thead><tr><th>Client</th><th>Type</th><th>Numéro</th><th class="text-end">Solde</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var compte in Model.TousLesComptes)
+                    {
+                        var proprietaire = Model.Clients.FirstOrDefault(c => c.CodeClient == compte.CodeClient);
+                        <tr>
+                            <td>@compte.CodeClient — @proprietaire?.NomComplet</td>
+                            <td>@compte.Type</td>
+                            <td><code>@compte.NumeroCompte</code></td>
+                            <td class="text-end">
+                                @compte.Solde.ToString("C")
+                                @if (compte.Type == TypeCompte.MargeCredit && compte.Solde > 0)
+                                {
+                                    <span class="small text-danger">(dette)</span>
+                                }
+                            </td>
+                            <td><a asp-page="/Admin" asp-route-CompteConsulte="@compte.NumeroCompte" asp-fragment="historique">Historique</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
 
         <!-- OPÉRATIONS : intérêts, argent papier, fermeture, prélèvement hypothécaire -->
@@ -146,30 +171,48 @@ else
                 </div>
 
                 <div class="col-md-6">
-                    <h6>Fermer le guichet</h6>
-                    <form method="post" asp-page-handler="FermerGuichet">
-                        <button class="btn btn-outline-danger w-100" onclick="return confirm('Fermer définitivement le guichet ?');">Fermer le guichet</button>
-                    </form>
+                    @if (Model.Guichet.EstFerme)
+                    {
+                        <h6>Rouvrir le guichet</h6>
+                        <form method="post" asp-page-handler="OuvrirGuichet">
+                            <button class="btn btn-outline-success w-100">Rouvrir le guichet</button>
+                        </form>
+                    }
+                    else
+                    {
+                        <h6>Fermer le guichet</h6>
+                        <form method="post" asp-page-handler="FermerGuichet">
+                            <button class="btn btn-outline-danger w-100" onclick="return confirm('Fermer le guichet ? Plus aucune transaction client ne sera acceptée.');">Fermer le guichet</button>
+                        </form>
+                    }
                 </div>
 
                 <div class="col-md-6">
                     <h6>Payer 1% d'intérêt à tous les comptes Épargne</h6>
                     <form method="post" asp-page-handler="InteretEpargne">
-                        <button class="btn btn-success w-100">Verser l'intérêt</button>
+                        <button class="btn btn-success w-100" onclick="return confirm('Verser 1 % d\'intérêt à tous les comptes Épargne ?');">Verser l'intérêt</button>
                     </form>
                 </div>
 
                 <div class="col-md-6">
                     <h6>Charger 5% d'intérêt sur toutes les marges de crédit endettées</h6>
                     <form method="post" asp-page-handler="InteretMargeCredit">
-                        <button class="btn btn-warning w-100">Charger l'intérêt</button>
+                        <button class="btn btn-warning w-100" onclick="return confirm('Charger 5 % d\'intérêt sur toutes les marges de crédit endettées ?');">Charger l'intérêt</button>
                     </form>
                 </div>
 
                 <div class="col-md-12">
                     <h6>Prélever un montant sur un compte hypothécaire spécifique</h6>
                     <form method="post" asp-page-handler="PreleverHypothecaire" class="row g-2">
-                        <div class="col-md-4"><input name="CompteHypothecaireCible" class="form-control" placeholder="Numéro de compte hypothécaire" required /></div>
+                        <div class="col-md-4">
+                            <select name="CompteHypothecaireCible" class="form-select" required>
+                                <option value="">Choisir un compte hypothécaire…</option>
+                                @foreach (var h in Model.TousLesComptes.Where(c => c.Type == TypeCompte.Hypothecaire))
+                                {
+                                    <option value="@h.NumeroCompte">@h.CodeClient — #@h.NumeroCompte — @h.Solde.ToString("C")</option>
+                                }
+                            </select>
+                        </div>
                         <div class="col-md-4"><input type="number" step="0.01" name="MontantPrelevement" class="form-control" placeholder="Montant" required /></div>
                         <div class="col-md-4 d-grid"><button class="btn btn-primary">Prélever</button></div>
                     </form>
@@ -180,7 +223,7 @@ else
 
         <!-- HISTORIQUE -->
         <div class="tab-pane fade" id="historique">
-            <form method="get" class="row g-2 mb-3">
+            <form method="get" action="#historique" class="row g-2 mb-3">
                 <div class="col-md-6"><input name="CompteConsulte" value="@Model.CompteConsulte" class="form-control" placeholder="Filtrer par numéro de compte (vide = tout afficher)" /></div>
                 <div class="col-md-3"><button class="btn btn-outline-primary">Filtrer</button></div>
             </form>

@@ -109,11 +109,15 @@ wwwroot/       CSS (thème "guichet") + JS (clavier numérique du NIP)
   message d'avertissement) ; si le client n'a pas de marge de crédit, la transaction est refusée ;
   si l'argent papier du guichet est insuffisant, la transaction est aussi refusée.
 - Transfert : toujours à partir du compte Chèque, vers n'importe quel autre type de compte ;
-  c'est la seule façon de rembourser une marge de crédit.
-- Paiement de facture : prélevé du compte Chèque, frais fixes de 1,25 $.
+  c'est la seule façon de rembourser une marge de crédit. Si le solde du Chèque est insuffisant,
+  la différence est puisée dans la marge de crédit (sauf pour rembourser la marge elle-même).
+- Paiement de facture : prélevé du compte Chèque, frais fixes de 1,25 $ ; si le solde est
+  insuffisant, la différence est puisée dans la marge de crédit (sinon, transaction refusée).
 - Chaque transaction individuelle est sauvegardée (historique complet, jamais seulement le solde final).
-- Administrateur : créer client/compte, bloquer/débloquer, ajouter de l'argent papier
-  (max 20 000 $), fermer le guichet, payer 1 % d'intérêt aux comptes Épargne, charger 5 %
+- Administrateur : créer client (code de 4 chiffres) et compte (un seul Chèque et une seule
+  marge de crédit par client, marge créée sans dette), bloquer/débloquer (le déblocage redonne
+  3 essais de NIP), voir la liste de tous les comptes, ajouter de l'argent papier
+  (max 20 000 $), fermer et rouvrir le guichet, payer 1 % d'intérêt aux comptes Épargne (solde positif), charger 5 %
   d'intérêt aux marges de crédit endettées, prélever un montant sur un compte hypothécaire
   spécifique (avec recours à la marge de crédit si le solde est insuffisant), consulter
   l'historique de toutes les transactions par compte.

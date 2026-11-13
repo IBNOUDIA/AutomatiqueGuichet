@@ -108,9 +108,6 @@ public partial class BanqueService
             if (destination.CodeClient != cheque.CodeClient)
                 return Resultat.Echec("Le compte de destination doit appartenir au même client.");
 
-            if (cheque.Solde < montant)
-                return Resultat.Echec("Solde insuffisant dans le compte Chèque pour effectuer ce transfert.");
-
             // Un remboursement de marge ne peut pas dépasser la dette : sinon le surplus
             // serait débité du compte Chèque sans être crédité nulle part.
             if (destination.Type == TypeCompte.MargeCredit && montant > destination.Solde)
@@ -118,7 +115,17 @@ public partial class BanqueService
                     ? "La marge de crédit n'a aucune dette à rembourser."
                     : $"Le montant dépasse la dette de la marge de crédit ({destination.Solde:C}).");
 
-            cheque.Solde -= montant;
+            // Rembourser une marge avec de l'argent emprunté sur cette même marge n'a pas de sens :
+            // dans ce cas seulement, le solde du Chèque doit suffire.
+            if (destination.Type == TypeCompte.MargeCredit && cheque.Solde < montant)
+                return Resultat.Echec("Solde insuffisant dans le compte Chèque pour rembourser la marge de crédit.");
+
+            var description = $"Transfert de {montant:C} du compte Chèque vers le compte {destination.Type}.";
+            var manque = DebiterAvecMarge(data, cheque, montant);
+            if (manque is null)
+                return Resultat.Echec("Solde insuffisant dans le compte Chèque et aucune marge de crédit disponible. Transaction refusée.");
+            if (manque > 0)
+                description += $" {manque:C} prélevés de la marge de crédit (solde insuffisant).";
 
             if (destination.Type == TypeCompte.MargeCredit)
             {
@@ -131,10 +138,11 @@ public partial class BanqueService
             }
 
             EnregistrerTransaction(data, TypeTransaction.Transfert, montant, cheque.NumeroCompte,
-                destination.NumeroCompte, cheque.CodeClient,
-                $"Transfert de {montant:C} du compte Chèque vers le compte {destination.Type}.");
+                destination.NumeroCompte, cheque.CodeClient, description);
 
-            return Resultat.Ok($"Transfert de {montant:C} effectué avec succès.");
+            return Resultat.Ok(manque > 0
+                ? $"Transfert effectué. Attention : {description}"
+                : $"Transfert de {montant:C} effectué avec succès.");
         });
     }
 
@@ -151,17 +159,44 @@ public partial class BanqueService
                 return Resultat.Echec("Un paiement de facture doit être prélevé d'un compte Chèque.");
 
             var montantTotal = montant + FraisPaiementFacture;
-            if (cheque.Solde < montantTotal)
-                return Resultat.Echec($"Solde insuffisant (montant + frais de {FraisPaiementFacture:C}).");
+            var manque = DebiterAvecMarge(data, cheque, montantTotal);
+            if (manque is null)
+                return Resultat.Echec($"Solde insuffisant (montant + frais de {FraisPaiementFacture:C}) et aucune marge de crédit disponible. Transaction refusée.");
 
-            cheque.Solde -= montantTotal;
+            var description = $"Paiement de facture de {montant:C} + frais de {FraisPaiementFacture:C}.";
+            if (manque > 0)
+                description += $" {manque:C} prélevés de la marge de crédit (solde insuffisant).";
 
             EnregistrerTransaction(data, TypeTransaction.PaiementFacture, montant, cheque.NumeroCompte,
-                null, cheque.CodeClient,
-                $"Paiement de facture de {montant:C} + frais de {FraisPaiementFacture:C}.");
+                null, cheque.CodeClient, description);
 
-            return Resultat.Ok($"Paiement de facture de {montant:C} effectué (frais de {FraisPaiementFacture:C} inclus).");
+            return Resultat.Ok(manque > 0
+                ? $"Paiement effectué. Attention : {description}"
+                : $"Paiement de facture de {montant:C} effectué (frais de {FraisPaiementFacture:C} inclus).");
         });
+    }
+
+    /// <summary>
+    /// Débite <paramref name="montant"/> du compte. Si le solde est insuffisant, le compte est
+    /// mis à 0 et la différence est ajoutée à la dette de la marge de crédit du client.
+    /// Retourne le montant pris sur la marge (0 si aucun), ou null si le solde est insuffisant
+    /// et que le client n'a pas de marge de crédit (rien n'est alors modifié).
+    /// </summary>
+    private static decimal? DebiterAvecMarge(BanqueData data, CompteBancaire compte, decimal montant)
+    {
+        if (compte.Solde >= montant)
+        {
+            compte.Solde -= montant;
+            return 0m;
+        }
+
+        var marge = data.Comptes.FirstOrDefault(c => c.CodeClient == compte.CodeClient && c.Type == TypeCompte.MargeCredit);
+        if (marge is null) return null;
+
+        var manque = montant - compte.Solde;
+        compte.Solde = 0m;
+        marge.Solde += manque; // un solde positif = dette
+        return manque;
     }
 
     private static void EnregistrerTransaction(BanqueData data, TypeTransaction type, decimal montant,

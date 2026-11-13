@@ -117,6 +117,9 @@ public partial class BanqueService
     public List<Transaction> ObtenirToutesLesTransactions() =>
         _store.Lire(data => data.Transactions.OrderByDescending(t => t.DateHeure).ToList());
 
+    public List<CompteBancaire> ObtenirTousLesComptes() =>
+        _store.Lire(data => data.Comptes.OrderBy(c => c.CodeClient).ThenBy(c => c.Type).ToList());
+
     public Guichet ObtenirGuichet() => _store.Lire(data => data.Guichet);
 
     public List<Client> ObtenirTousLesClients() =>

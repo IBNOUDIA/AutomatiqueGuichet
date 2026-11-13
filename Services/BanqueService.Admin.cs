@@ -10,7 +10,8 @@ public partial class BanqueService
     public Resultat CreerClient(string codeClient, string nom, string prenom, string telephone,
         string courriel, string nip, decimal soldeInitialCheque)
     {
-        if (string.IsNullOrWhiteSpace(codeClient)) return Resultat.Echec("Le code client est requis.");
+        if (codeClient.Length != 4 || !codeClient.All(char.IsDigit))
+            return Resultat.Echec("Le code client doit être composé de 4 chiffres.");
         if (nip.Length != 4 || !nip.All(char.IsDigit)) return Resultat.Echec("Le NIP doit être composé de 4 chiffres.");
 
         return _store.Ecrire(data =>
@@ -53,8 +54,15 @@ public partial class BanqueService
             if (!comptesClient.Any(c => c.Type == TypeCompte.Cheque) && type != TypeCompte.Cheque)
                 return Resultat.Echec("Le client doit d'abord posséder un compte Chèque.");
 
+            if (type == TypeCompte.Cheque && comptesClient.Any(c => c.Type == TypeCompte.Cheque))
+                return Resultat.Echec("Ce client possède déjà un compte Chèque (un seul compte de ce type est permis).");
+
             if (type == TypeCompte.MargeCredit && comptesClient.Any(c => c.Type == TypeCompte.MargeCredit))
                 return Resultat.Echec("Ce client possède déjà une marge de crédit (un seul compte de ce type est permis).");
+
+            // Le solde d'une marge représente une dette : une nouvelle marge commence toujours à 0 $.
+            if (type == TypeCompte.MargeCredit && soldeInitial != 0)
+                return Resultat.Echec("Une marge de crédit est créée sans dette : laissez le solde initial à 0 $.");
 
             data.Comptes.Add(new CompteBancaire
             {
@@ -75,6 +83,8 @@ public partial class BanqueService
             if (client is null) return Resultat.Echec("Client introuvable.");
 
             client.EstBloque = bloquer;
+            // Remet le compteur de NIP à zéro : un client débloqué retrouve ses 3 essais.
+            client.TentativesEchoueesConnexion = 0;
             TentativesEchouees.Remove(codeClient);
 
             return Resultat.Ok(bloquer
@@ -129,12 +139,21 @@ public partial class BanqueService
         });
     }
 
+    public Resultat OuvrirGuichet()
+    {
+        return _store.Ecrire(data =>
+        {
+            data.Guichet.EstFerme = false;
+            return Resultat.Ok("Le guichet a été rouvert. Les transactions sont de nouveau acceptées.");
+        });
+    }
+
     /// <summary>Paye 1% d'intérêt à tous les comptes Épargne, en un seul clic.</summary>
     public Resultat PayerInteretEpargne()
     {
         return _store.Ecrire(data =>
         {
-            var comptesEpargne = data.Comptes.Where(c => c.Type == TypeCompte.Epargne).ToList();
+            var comptesEpargne = data.Comptes.Where(c => c.Type == TypeCompte.Epargne && c.Solde > 0).ToList();
             foreach (var compte in comptesEpargne)
             {
                 var interet = Math.Round(compte.Solde * TauxInteretEpargne, 2);

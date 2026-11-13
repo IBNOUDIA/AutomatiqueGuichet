@@ -29,6 +29,7 @@ public class AdminModel : PageModel
     public string? MessageSucces { get; set; }
 
     public List<Models.Client> Clients { get; set; } = new();
+    public List<CompteBancaire> TousLesComptes { get; set; } = new();
     public Guichet Guichet { get; set; } = new();
     public List<Transaction> TransactionsAffichees { get; set; } = new();
 
@@ -73,13 +74,18 @@ public class AdminModel : PageModel
         EstConnecte = HttpContext.Session.GetString(CleSessionAdmin) == "1";
         if (!EstConnecte) return false;
 
+        ChargerDonnees();
+        return true;
+    }
+
+    private void ChargerDonnees()
+    {
         Clients = _banque.ObtenirTousLesClients();
+        TousLesComptes = _banque.ObtenirTousLesComptes();
         Guichet = _banque.ObtenirGuichet();
         TransactionsAffichees = string.IsNullOrEmpty(CompteConsulte)
             ? _banque.ObtenirToutesLesTransactions().Take(30).ToList()
             : _banque.ObtenirTransactions(CompteConsulte);
-
-        return true;
     }
 
     public void OnGet()
@@ -124,6 +130,12 @@ public class AdminModel : PageModel
         if (string.IsNullOrWhiteSpace(NouveauNom) || string.IsNullOrWhiteSpace(NouveauPrenom))
         {
             MessageErreur = "Le nom et prénom sont requis.";
+            return Page();
+        }
+
+        if (NouveauCodeClient.Trim().Length != 4 || !NouveauCodeClient.Trim().All(char.IsDigit))
+        {
+            MessageErreur = "Le code client doit être composé de 4 chiffres.";
             return Page();
         }
 
@@ -273,6 +285,19 @@ public class AdminModel : PageModel
         return Page();
     }
 
+    public IActionResult OnPostOuvrirGuichet()
+    {
+        if (!ChargerEtatSiConnecte()) return RedirectToPage("/Admin");
+
+        var resultat = _banque.OuvrirGuichet();
+
+        if (resultat.Succes)
+            _audit.OperationAdmin("OPEN_ATM", "Guichet rouvert");
+
+        Appliquer(resultat);
+        return Page();
+    }
+
     public IActionResult OnPostInteretEpargne()
     {
         if (!ChargerEtatSiConnecte()) return RedirectToPage("/Admin");
@@ -330,10 +355,6 @@ public class AdminModel : PageModel
         else MessageErreur = resultat.Message;
 
         // Recharge les données affichées après la mutation.
-        Clients = _banque.ObtenirTousLesClients();
-        Guichet = _banque.ObtenirGuichet();
-        TransactionsAffichees = string.IsNullOrEmpty(CompteConsulte)
-            ? _banque.ObtenirToutesLesTransactions().Take(30).ToList()
-            : _banque.ObtenirTransactions(CompteConsulte);
+        ChargerDonnees();
     }
 }
